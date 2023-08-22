@@ -3,6 +3,7 @@ const express  = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
+var encrypt = require('mongoose-encryption');
 
 const app = express();
 
@@ -11,10 +12,14 @@ app.set('view engine','ejs');
 app.use(bodyParser.urlencoded({extended: true}));
 
 mongoose.connect("mongodb://127.0.0.1:27017/userDB",{useNewUrlParser: true});
-const userSchema = {
+
+const userSchema = new mongoose.Schema({
   email: {type: String, required: true},
   password: {type: String, required: true}
-};
+});
+
+const secret = "thisisourlittlesecret";
+userSchema.plugin(encrypt, { secret: secret,encryptedFields: ['password']});
 
 const User = new mongoose.model("User",userSchema);
 
@@ -53,22 +58,27 @@ app.post("/register",async function(req,res){
     }
   });
 
-app.post("/login",function(req,res){
-  const username = req.body.username;
-  const password = req.body.password;
+  app.post("/login", async function(req, res) {
+    try {
+      const username = req.body.username;
+      const password = req.body.password;
 
-  User.findOne({email: username}).then((foundUser)=>{
-    if(foundUser){
-      if(foundUser.password === password){
-        res.render("secrets");
-      };
-    }else{
+      const foundUser = await User.findOne({ email: username });
+
+      if (foundUser) {
+        if (foundUser.password === password) {
+          res.render("secrets");
+        } else {
+          res.send("Incorrect password.");
+        }
+      } else {
         res.send("No user found");
+      }
+    } catch (err) {
+      console.log("Login error:", err);
+      res.status(500).send("Internal server error");
     }
-  }).catch((err)=>{
-    console.log(err);
-  })
-});
+  });
 
 app.listen(3000,function(){
   console.log("Server started on port 3000");
